@@ -126,6 +126,7 @@ const LmsActivitySchema = new Schema<LmsActivity>({
   activityType: { type: String, required: true },
   durationSec: { type: Number, required: true },
 });
+LmsActivitySchema.index({ studentId: 1, courseId: 1, date: 1, activityType: 1 }, { unique: true });
 LmsActivitySchema.index({ studentId: 1, date: -1 });
 export const LmsActivityModel = mongoose.model<LmsActivity>("LmsActivity", LmsActivitySchema);
 

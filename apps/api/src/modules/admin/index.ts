@@ -1,42 +1,38 @@
-import { Router, Request, Response } from "express";
+import { Router } from "express";
+import { requireRole } from "../../auth/rbac.middleware.js";
+import {
+  listModelVersions,
+  proposeOrCreateModelVersion,
+  activateModelVersion,
+  getAuditTrail,
+} from "./admin.controller.js";
 
 // Module M8: Configuration & Audit Router (Team Member 1 - Pawan)
 const router = Router();
 
 /**
  * GET /api/v1/admin/model-versions
- * Stage 1 Scaffold Endpoint: Returns 501 Not Implemented.
+ * List all model configuration versions from the database.
  */
-router.get("/model-versions", (req: Request, res: Response) => {
-  res.status(501).json({
-    status: "not_implemented",
-    module: "M8",
-    message: "Model versions listing endpoint is scaffolded for Stage 1. Full database integration pending Stage 2.",
-  });
-});
+router.get("/model-versions", requireRole("admin"), listModelVersions);
 
 /**
  * POST /api/v1/admin/model-versions
- * Stage 1 Scaffold Endpoint: Returns 501 Not Implemented.
+ * Compute band-change impact preview against historical student data.
+ * If commit: true, persist version to MongoDB and emit an immutable audit entry.
  */
-router.post("/model-versions", (req: Request, res: Response) => {
-  res.status(501).json({
-    status: "not_implemented",
-    module: "M8",
-    message: "Model version proposal & preview endpoint is scaffolded for Stage 1. Full calculation pending Stage 2.",
-  });
-});
+router.post("/model-versions", requireRole("admin"), proposeOrCreateModelVersion);
+
+/**
+ * POST /api/v1/admin/model-versions/:v/activate
+ * Activate a specified model version and emit an immutable audit entry.
+ */
+router.post("/model-versions/:v/activate", requireRole("admin"), activateModelVersion);
 
 /**
  * GET /api/v1/admin/audit
- * Stage 1 Scaffold Endpoint: Returns 501 Not Implemented.
+ * Paginated, filterable audit log reader.
  */
-router.get("/audit", (req: Request, res: Response) => {
-  res.status(501).json({
-    status: "not_implemented",
-    module: "M8",
-    message: "Audit log fetch endpoint is scaffolded for Stage 1. Full audit service integration pending Stage 2.",
-  });
-});
+router.get("/audit", requireRole("admin"), getAuditTrail);
 
 export default router;

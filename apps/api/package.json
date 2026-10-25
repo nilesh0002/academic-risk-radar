@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "node --test dist/tests/**/*.test.js",
+    "test:rbac": "node --test dist/tests/rbac.test.js",
     "seed": "node dist/src/modules/trends/seed-generator.js"
   },
   "dependencies": {

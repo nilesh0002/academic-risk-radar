@@ -558,8 +558,20 @@ export async function importLmsActivityFromCsv(csvContent: string): Promise<Pers
   }
 
   if (result.valid.length > 0) {
-    // LMS events are typically time-series, insert valid items
-    await LmsActivityModel.insertMany(result.valid);
+    // Idempotent upsert: same student + course + date + activityType -> update instead of duplicate
+    const ops = result.valid.map((record) => ({
+      updateOne: {
+        filter: {
+          studentId: record.studentId,
+          courseId: record.courseId,
+          date: record.date,
+          activityType: record.activityType,
+        },
+        update: { $set: record },
+        upsert: true,
+      },
+    }));
+    await LmsActivityModel.bulkWrite(ops);
   }
 
   return {

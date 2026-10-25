@@ -208,6 +208,12 @@ npm run build --workspace=packages/shared-types
 # Verify TypeScript across the monorepo
 npm run typecheck
 
+# Run test suite across packages and API
+npm test
+
+# Run Stage 2 RBAC and negative-access security tests
+npm --prefix apps/api run test:rbac
+
 # Start local services (MongoDB, API, Web)
 docker compose -f infra/docker-compose.yml up -d
 ```

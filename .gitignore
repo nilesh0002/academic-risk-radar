@@ -27,3 +27,9 @@ out/
 # Testing & Coverage
 coverage/
 .nyc_output/
+
+# Local Progress Reports & Notes (Not committed)
+*progress-report*
+STAGE_2_PROGRESS_REPORT.md
+*stage2-progress*
+

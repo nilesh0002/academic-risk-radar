@@ -69,7 +69,6 @@ export function requireRole(...allowedRoles: UserRole[]) {
  * - An administrator can NEVER read raw assessment/attendance marks (only aggregated risk data).
  */
 export function enforceStudentAccessControl(req: Request, res: Response, next: NextFunction) {
-  const targetStudentId = req.params.id || req.query.studentId;
   const user = req.user;
 
   if (!user) {
@@ -77,14 +76,36 @@ export function enforceStudentAccessControl(req: Request, res: Response, next: N
   }
 
   // Rule 1: Student can only view their own record
-  if (user.role === "student" && targetStudentId && targetStudentId !== user.id) {
-    return res.status(403).json({
-      error: "Forbidden: Students are restricted to accessing their own data",
-    });
+  if (user.role === "student") {
+    const studentIdsToCheck: (string | undefined)[] = [
+      req.params.id,
+      req.params.studentId,
+      typeof req.query.studentId === "string" ? req.query.studentId : undefined,
+      typeof req.body === "object" && req.body !== null ? req.body.studentId : undefined,
+    ];
+
+    const studentPathMatch = req.path.match(/\/students\/([^/]+)/);
+    if (studentPathMatch && studentPathMatch[1]) {
+      studentIdsToCheck.push(studentPathMatch[1]);
+    }
+
+    for (const sid of studentIdsToCheck) {
+      if (sid && String(sid) !== String(user.id)) {
+        return res.status(403).json({
+          error: "Forbidden: Students are restricted to accessing their own data",
+        });
+      }
+    }
   }
 
-  // Rule 2: Admin cannot access raw marks endpoints
-  if (user.role === "admin" && (req.path.includes("/raw") || req.path.includes("/assessments") || req.path.includes("/attendance"))) {
+  // Rule 2: Admin cannot access raw marks or raw records
+  if (
+    user.role === "admin" &&
+    (req.path.includes("/raw") ||
+      req.path.includes("/assessments") ||
+      req.path.includes("/attendance") ||
+      req.query.includeRaw === "true")
+  ) {
     return res.status(403).json({
       error: "Forbidden: Administrators are strictly restricted from viewing raw assessment or attendance records",
     });

@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "npm run dev --workspace=@academic-risk-radar/web",
+    "dev:all": "npm run dev --workspace=@academic-risk-radar/web & npm run dev --workspace=@academic-risk-radar/api",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"

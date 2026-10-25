@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import rateLimit from "express-rate-limit";
 import {
   AssessmentRecordModel,
   AssignmentSubmissionModel,
@@ -16,6 +17,15 @@ import { getIngestionQueue } from "./queue.js";
 
 // Module M1: Ingestion & Normalisation (Team Member 3 - Nilesh)
 const router = Router();
+
+const ingestionRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.use(ingestionRateLimiter);
 
 /** Supported connector names for validation */
 const SUPPORTED_CONNECTORS = ["attendance", "assessment", "assessments", "assignment", "assignments", "lms", "lms-activity"];

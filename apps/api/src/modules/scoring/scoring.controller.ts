@@ -37,7 +37,7 @@ export async function getStudentRisk(req: Request, res: Response) {
 
     return res.status(200).json(snapshot);
   } catch (err: any) {
-    console.error(`[ScoringController] Error querying risk snapshot for ${studentId}:`, err);
+    console.error("[ScoringController] Error querying risk snapshot for %s:", studentId, err);
     return res.status(500).json({
       error: `Failed to retrieve risk snapshot: ${err.message}`,
       studentId,

@@ -248,6 +248,7 @@ Full project documentation is in the [`docs/`](docs/) folder:
 |---|---|
 | [`build-plan.md`](docs/build-plan.md) | Architecture, module boundaries & API contracts |
 | [`stage-wise-development-plan.md`](docs/stage-wise-development-plan.md) | Stage-by-stage dev checklist |
+| [`frontend-implementation-plan.md`](docs/frontend-implementation-plan.md) | Next.js App Router frontend blueprint & Week 9 evaluation gate plan |
 | [`api-contract.md`](docs/api-contract.md) | REST endpoint specification & RBAC rules |
 | [`model-specification.md`](docs/model-specification.md) | Scoring weights & risk band thresholds |
 | [`glossary.md`](docs/glossary.md) | Canonical domain terminology |

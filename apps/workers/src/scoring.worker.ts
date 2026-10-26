@@ -200,6 +200,38 @@ export const scoringWorker = new Worker(
         }
       }
 
+      // Stage 2 M5 Hook: Automatically generate/deduplicate alert for high/critical students
+      if (["high", "critical"].includes(snapshot.band) && models?.AlertModel) {
+        try {
+          const assignment = models.MentorAssignmentModel
+            ? await models.MentorAssignmentModel.findOne({ studentId, assignedTo: null }).lean()
+            : null;
+          const mentorId = assignment?.mentorId || "MTR-DEFAULT";
+
+          const existingAlert = await models.AlertModel.findOne({ studentId, status: "open" });
+          if (existingAlert) {
+            existingAlert.riskSnapshotId = snapshot._id;
+            await existingAlert.save();
+          } else {
+            const crypto = await import("crypto");
+            const slaDeadline = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+            await models.AlertModel.create({
+              _id: crypto.randomUUID(),
+              studentId,
+              mentorId,
+              riskSnapshotId: snapshot._id,
+              status: "open",
+              createdAt: computedAt,
+              acknowledgedAt: null,
+              escalatedAt: null,
+              slaDeadline,
+            });
+          }
+        } catch (err: any) {
+          console.warn(`[Scoring Worker] Error generating/deduplicating alert for ${studentId}: ${err.message}`);
+        }
+      }
+
       createdSnapshots.push(snapshot);
     }
 

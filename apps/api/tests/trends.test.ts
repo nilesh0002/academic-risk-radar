@@ -9,6 +9,67 @@ import {
   calculateRollingBaseline,
   computeTrendDeteriorationSignal,
 } from "../src/modules/trends/rolling-baseline.js";
+import {
+  computeStudentTrendsFromRecords,
+  sanitizeStudentId,
+} from "../src/modules/trends/trends.service.js";
+import {
+  AssessmentRecord,
+  AssignmentSubmission,
+  AttendanceRecord,
+  LmsActivity,
+} from "@academic-risk-radar/shared-types";
+
+function makeRequest(
+  path: string,
+  method: string = "GET",
+  headers: Record<string, string> = {}
+): Promise<{ statusCode: number; data: any }> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(app);
+    server.listen(0, () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        return reject(new Error("Failed to get server address"));
+      }
+
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port: address.port,
+          path,
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+        },
+        (res) => {
+          let rawData = "";
+          res.on("data", (chunk) => {
+            rawData += chunk;
+          });
+          res.on("end", () => {
+            server.close();
+            try {
+              const data = JSON.parse(rawData);
+              resolve({ statusCode: res.statusCode || 500, data });
+            } catch {
+              resolve({ statusCode: res.statusCode || 500, data: rawData });
+            }
+          });
+        }
+      );
+
+      req.on("error", (err) => {
+        server.close();
+        reject(err);
+      });
+      req.end();
+    });
+  });
+}
 
 describe("M4: Trend & Anomaly Detection — Rolling Baseline & Deterioration Engine", () => {
   describe("calculateRollingBaseline", () => {
@@ -123,48 +184,99 @@ describe("M4: Trend & Anomaly Detection — Rolling Baseline & Deterioration Eng
     });
   });
 
-  describe("API Route Scaffolds", () => {
-    it("GET /api/v1/trends/:id should return HTTP 501 Stage 2 pending payload", async () => {
-      const server = http.createServer(app);
-      await new Promise<void>((resolve, reject) => {
-        server.listen(0, () => {
-          const address = server.address();
-          if (!address || typeof address === "string") {
-            server.close();
-            return reject(new Error("Failed to get server address"));
-          }
+  describe("computeStudentTrendsFromRecords — Pure Multi-Week Engine", () => {
+    it("should handle empty records with safe baseline and zero deterioration", () => {
+      const res = computeStudentTrendsFromRecords("STD200", {});
+      assert.equal(res.studentId, "STD200");
+      assert.equal(res.trendDeteriorationSignal, 0.0);
+      assert.equal(res.details.isSuddenDrop, false);
+      assert.equal(res.baseline.avgAttendanceRate, 1.0);
+    });
 
-          const req = http.request(
-            {
-              hostname: "127.0.0.1",
-              port: address.port,
-              path: "/api/v1/trends/STD100",
-              method: "GET",
-            },
-            (res) => {
-              let rawData = "";
-              res.on("data", (chunk) => {
-                rawData += chunk;
-              });
-              res.on("end", () => {
-                server.close();
-                assert.equal(res.statusCode, 501);
-                const data = JSON.parse(rawData);
-                assert.equal(data.status, "not_implemented");
-                assert.equal(data.studentId, "STD100");
-                assert.equal(data.module, "M4");
-                resolve();
-              });
-            }
-          );
-          req.on("error", (err) => {
-            server.close();
-            reject(err);
-          });
-          req.end();
-        });
+    it("should partition records into weeks and detect multi-week deterioration", () => {
+      const baseTime = new Date("2026-09-01T09:00:00Z").getTime();
+      const ONE_WEEK = 7 * 24 * 3600 * 1000;
+
+      // Week 1: Great attendance & assessments
+      const attendance: AttendanceRecord[] = [
+        { studentId: "STD201", sectionId: "SEC1", date: new Date(baseTime).toISOString(), status: "present", sourceRef: "ref1" },
+        { studentId: "STD201", sectionId: "SEC1", date: new Date(baseTime + 2 * 24 * 3600 * 1000).toISOString(), status: "present", sourceRef: "ref2" },
+      ];
+      const assessments: AssessmentRecord[] = [
+        { studentId: "STD201", courseId: "CS101", type: "quiz", score: 90, maxScore: 100, date: new Date(baseTime).toISOString(), sourceRef: "ref3" },
+      ];
+      const lms: LmsActivity[] = [
+        { studentId: "STD201", courseId: "CS101", date: new Date(baseTime).toISOString(), activityType: "video", durationSec: 3600 },
+      ];
+
+      // Week 2: Sudden drop — absent, failed assessment, low LMS
+      attendance.push(
+        { studentId: "STD201", sectionId: "SEC1", date: new Date(baseTime + ONE_WEEK).toISOString(), status: "absent", sourceRef: "ref4" },
+        { studentId: "STD201", sectionId: "SEC1", date: new Date(baseTime + ONE_WEEK + 2 * 24 * 3600 * 1000).toISOString(), status: "absent", sourceRef: "ref5" }
+      );
+      assessments.push(
+        { studentId: "STD201", courseId: "CS101", type: "quiz", score: 30, maxScore: 100, date: new Date(baseTime + ONE_WEEK).toISOString(), sourceRef: "ref6" }
+      );
+      lms.push(
+        { studentId: "STD201", courseId: "CS101", date: new Date(baseTime + ONE_WEEK).toISOString(), activityType: "video", durationSec: 300 }
+      );
+
+      const res = computeStudentTrendsFromRecords("STD201", { attendance, assessments, lms });
+
+      assert.equal(res.studentId, "STD201");
+      assert.equal(res.weeklyHistory.length, 2);
+      assert.equal(res.details.isSuddenDrop, true);
+      assert.ok(res.trendDeteriorationSignal >= 0.55, `Expected deterioration signal >= 0.55, got ${res.trendDeteriorationSignal}`);
+    });
+  });
+
+  describe("sanitizeStudentId", () => {
+    it("should allow alphanumeric, underscores, and hyphens", () => {
+      assert.equal(sanitizeStudentId("STD-1001"), "STD-1001");
+      assert.equal(sanitizeStudentId("student_42"), "student_42");
+    });
+
+    it("should reject invalid, empty, or malicious characters", () => {
+      assert.equal(sanitizeStudentId(""), null);
+      assert.equal(sanitizeStudentId(null), null);
+      assert.equal(sanitizeStudentId({ $ne: 1 }), null);
+      assert.equal(sanitizeStudentId("STD<script>"), null);
+    });
+  });
+
+  describe("API Route Integration & Access Control", () => {
+    it("Student A cannot query Student B trends (returns 403 Forbidden)", async () => {
+      const res = await makeRequest("/api/v1/students/STD_BOB/trends", "GET", {
+        "x-user-id": "STD_ALICE",
+        "x-user-role": "student",
       });
+      assert.equal(res.statusCode, 403);
+      assert.match(res.data.error, /Forbidden/i);
+    });
+
+    it("Student A CAN query their own trends endpoint (not 403 Forbidden)", async () => {
+      const res = await makeRequest("/api/v1/students/STD_ALICE/trends", "GET", {
+        "x-user-id": "STD_ALICE",
+        "x-user-role": "student",
+      });
+      assert.notEqual(res.statusCode, 403);
+    });
+
+    it("Staff (Instructor, Mentor, Admin) can access student trends", async () => {
+      const res = await makeRequest("/api/v1/trends/STD_1001", "GET", {
+        "x-user-id": "MTR_001",
+        "x-user-role": "mentor",
+      });
+      // In test mode without DB connection, returns 404 cleanly without 403
+      assert.notEqual(res.statusCode, 403);
+    });
+
+    it("Invalid student ID returns 400 Bad Request", async () => {
+      const res = await makeRequest("/api/v1/trends/invalid%20id%20with%20spaces!", "GET", {
+        "x-user-id": "ADMIN_001",
+        "x-user-role": "admin",
+      });
+      assert.equal(res.statusCode, 400);
     });
   });
 });
-

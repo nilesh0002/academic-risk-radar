@@ -96,8 +96,28 @@ export async function gatherStudentMetrics(
       }
     }
 
-    // Trend deterioration signal (default safe value)
-    const trendDeteriorationSignal = 0.05;
+    // Trend deterioration signal: compute using M4 trends engine if available
+    let trendDeteriorationSignal = 0.05;
+    try {
+      // @ts-ignore
+      const trendsModule = await import("../../api/dist/src/modules/trends/index.js");
+      if (trendsModule?.computeStudentTrendsFromRecords) {
+        const attendance = AttendanceRecordModel ? await AttendanceRecordModel.find({ studentId }).lean() : [];
+        const assessments = AssessmentRecordModel ? await AssessmentRecordModel.find({ studentId }).lean() : [];
+        const assignments = AssignmentSubmissionModel ? await AssignmentSubmissionModel.find({ studentId }).lean() : [];
+        const lms = LmsActivityModel ? await LmsActivityModel.find({ studentId }).lean() : [];
+
+        const trendResult = trendsModule.computeStudentTrendsFromRecords(studentId, {
+          attendance,
+          assessments,
+          assignments,
+          lms,
+        });
+        trendDeteriorationSignal = trendResult.trendDeteriorationSignal;
+      }
+    } catch {
+      trendDeteriorationSignal = 0.05;
+    }
 
     return {
       attendanceRate: Math.max(0, Math.min(1, attendanceRate)),
@@ -197,6 +217,38 @@ export const scoringWorker = new Worker(
           await models.RiskSnapshotModel.create(snapshot);
         } catch (err: any) {
           console.warn(`[Scoring Worker] Error saving snapshot for ${studentId}: ${err.message}`);
+        }
+      }
+
+      // Stage 2 M5 Hook: Automatically generate/deduplicate alert for high/critical students
+      if (["high", "critical"].includes(snapshot.band) && models?.AlertModel) {
+        try {
+          const assignment = models.MentorAssignmentModel
+            ? await models.MentorAssignmentModel.findOne({ studentId, assignedTo: null }).lean()
+            : null;
+          const mentorId = assignment?.mentorId || "MTR-DEFAULT";
+
+          const existingAlert = await models.AlertModel.findOne({ studentId, status: "open" });
+          if (existingAlert) {
+            existingAlert.riskSnapshotId = snapshot._id;
+            await existingAlert.save();
+          } else {
+            const crypto = await import("crypto");
+            const slaDeadline = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+            await models.AlertModel.create({
+              _id: crypto.randomUUID(),
+              studentId,
+              mentorId,
+              riskSnapshotId: snapshot._id,
+              status: "open",
+              createdAt: computedAt,
+              acknowledgedAt: null,
+              escalatedAt: null,
+              slaDeadline,
+            });
+          }
+        } catch (err: any) {
+          console.warn(`[Scoring Worker] Error generating/deduplicating alert for ${studentId}: ${err.message}`);
         }
       }
 

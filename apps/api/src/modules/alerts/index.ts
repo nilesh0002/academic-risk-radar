@@ -1,4 +1,15 @@
-import { Router, Request, Response } from "express";
+import { Router } from "express";
+import rateLimit from "express-rate-limit";
+import { requireRole } from "../../auth/rbac.middleware.js";
+import {
+  acknowledgeAlert,
+  getAlertById,
+  listAlerts,
+  triggerAlertGeneration,
+} from "./alerts.controller.js";
+
+export * from "./alerts.service.js";
+export * from "./alerts.controller.js";
 
 /**
  * Module M5: Alert Routing & Mentor Inbox (Team Member 2 — Vani Bhardwaj)
@@ -6,60 +17,75 @@ import { Router, Request, Response } from "express";
  * API Routes (from docs/api-contract.md):
  *   GET  /api/v1/alerts?mentorId=&status=   — Fetch mentor alert inbox
  *   POST /api/v1/alerts/:id/acknowledge     — Acknowledge an open risk alert
+ *   GET  /api/v1/alerts/:id                 — Retrieve single alert details
+ *   POST /api/v1/alerts/generate            — Automated/Internal alert generator
  *
- * Stage 1: Route scaffolds only (schemas defined in schemas.ts).
  * Stage 2: Full controller logic, MongoDB persistence, and BullMQ SLA worker.
- *
- * Depends on: M3 RiskSnapshots (Team Member 1), M4 trend signals (Team Member 2).
- * Produces for: M6 Interventions (Team Member 4) — interventions reference an alertId.
  *
  * RBAC Rules:
  *   - Mentor: Can access and acknowledge alerts for assigned mentees only.
- *   - HoD / Dean: Can view department/institution alert statistics via M7 endpoints.
+ *   - HoD / Dean / Admin: Can view department/institution alert statistics.
  */
 const router = Router();
 
-/**
- * GET /alerts
- * Fetch mentor alert inbox with optional filtering by mentorId and alert status.
- *
- * Query parameters (Stage 2):
- *   - mentorId?: string  — Filter alerts assigned to specific mentor
- *   - status?: AlertStatus ("open" | "acknowledged" | "escalated" | "closed")
- *
- * Response shape (Stage 2):
- *   200 — { alerts: Alert[], totalCount: number }
- *   403 — RBAC: mentor role required
- */
-router.get("/alerts", (_req: Request, res: Response) => {
-  res.status(501).json({
-    status: "not_implemented",
-    message: "GET /alerts — Stage 2 implementation pending",
-    module: "M5",
-    owner: "Team Member 2 (Vani Bhardwaj)",
-  });
+const listAlertsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-/**
- * POST /alerts/:id/acknowledge
- * Acknowledge an open risk alert assigned to the mentor.
- *
- * Path parameters:
- *   - id: string — Alert ObjectId
- *
- * Response shape (Stage 2):
- *   200 — { alert: Alert }
- *   404 — Alert not found
- *   403 — RBAC: only assigned mentor can acknowledge alert
- */
-router.post("/alerts/:id/acknowledge", (_req: Request, res: Response) => {
-  res.status(501).json({
-    status: "not_implemented",
-    message: "POST /alerts/:id/acknowledge — Stage 2 implementation pending",
-    module: "M5",
-    owner: "Team Member 2 (Vani Bhardwaj)",
-  });
+const acknowledgeAlertLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
+
+const getAlertLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const generateAlertLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// GET /api/v1/alerts?mentorId=&status=
+router.get(
+  "/alerts",
+  requireRole("mentor", "instructor", "hod", "dean", "admin"),
+  listAlertsLimiter,
+  listAlerts
+);
+
+// GET /api/v1/alerts/:id
+router.get(
+  "/alerts/:id",
+  requireRole("mentor", "instructor", "hod", "dean", "admin"),
+  getAlertLimiter,
+  getAlertById
+);
+
+// POST /api/v1/alerts/:id/acknowledge
+router.post(
+  "/alerts/:id/acknowledge",
+  requireRole("mentor", "hod", "dean", "admin"),
+  acknowledgeAlertLimiter,
+  acknowledgeAlert
+);
+
+// POST /api/v1/alerts/generate
+router.post(
+  "/alerts/generate",
+  requireRole("admin", "mentor", "instructor", "hod", "dean"),
+  generateAlertLimiter,
+  triggerAlertGeneration
+);
 
 export default router;
-

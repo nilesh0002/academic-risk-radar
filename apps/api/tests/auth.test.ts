@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import express from "express";
 import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
 import { UserModel } from "../src/db/schemas.js";
 import authRouter from "../src/auth/auth.routes.js";
 import { authenticateUser } from "../src/auth/rbac.middleware.js";
@@ -11,8 +12,13 @@ import { SESSION_COOKIE_NAME } from "../src/auth/jwt.service.js";
 describe("Authentication & JWT Session Tests (Team Member 1 — Pawan)", () => {
   function createAuthTestServer() {
     const app = express();
+    const limiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 1000,
+    });
     app.use(express.json());
     app.use(cookieParser());
+    app.use(limiter);
     app.use(authenticateUser);
 
     app.use("/api/v1/auth", authRouter);

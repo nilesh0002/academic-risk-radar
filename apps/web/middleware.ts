@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { UserRole } from "@academic-risk-radar/shared-types";
-import { ROLE_HOME_ROUTES, SESSION_COOKIE_NAME, SessionUser } from "./lib/auth";
+import { ROLE_HOME_ROUTES, SESSION_COOKIE_NAME, decodeJwtPayload, SessionUser } from "./lib/auth";
 
 /**
  * Route protection rules mapping URL path prefixes to allowed roles.
@@ -20,7 +20,7 @@ const ROUTE_PERMISSIONS: Array<{ prefix: string; allowed: UserRole[] }> = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Bypass static assets, internal Next.js routes, and API endpoints
+  // 1. Bypass static assets, internal Next.js routes, and API proxy
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
@@ -32,15 +32,23 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Extract session from cookie
-  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME);
+  // 2. Extract session from signed JWT cookie (or legacy session cookie)
+  const tokenCookie = request.cookies.get(SESSION_COOKIE_NAME) || request.cookies.get("arr_session");
   let session: SessionUser | null = null;
 
-  if (sessionCookie?.value) {
-    try {
-      session = JSON.parse(decodeURIComponent(sessionCookie.value)) as SessionUser;
-    } catch {
-      session = null;
+  if (tokenCookie?.value) {
+    session = decodeJwtPayload(tokenCookie.value);
+
+    // Fallback parser if legacy JSON cookie format
+    if (!session) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(tokenCookie.value));
+        if (parsed && parsed.id && parsed.role) {
+          session = parsed as SessionUser;
+        }
+      } catch {
+        session = null;
+      }
     }
   }
 
@@ -86,27 +94,11 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 8. Inject session headers into the request so downstream components have identity context
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-user-id", session.id);
-  requestHeaders.set("x-user-role", session.role);
-  requestHeaders.set("x-user-email", session.email);
-
-  return NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
+  return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

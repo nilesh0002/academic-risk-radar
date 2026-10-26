@@ -30,7 +30,7 @@ function SubmitButton() {
       }}
     >
       <LogIn size={18} strokeWidth={1.75} />
-      {pending ? "Signing in..." : "Sign in to Radar"}
+      {pending ? "Authenticating..." : "Sign in to Radar"}
     </button>
   );
 }
@@ -85,7 +85,7 @@ export function LoginForm({ returnUrl }: { returnUrl?: string }) {
           type="email"
           required
           autoComplete="email"
-          placeholder="e.g. mentor@academic.edu or student@academic.edu"
+          placeholder="e.g. instructor@radar.edu, mentor@radar.edu, student@radar.edu"
           style={{
             width: "100%",
             boxSizing: "border-box",
@@ -106,27 +106,25 @@ export function LoginForm({ returnUrl }: { returnUrl?: string }) {
       </div>
 
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.375rem" }}>
-          <label
-            htmlFor="password"
-            style={{
-              fontSize: "0.8125rem",
-              fontWeight: 600,
-              color: "#2B2623",
-            }}
-          >
-            Password
-          </label>
-          <span style={{ fontSize: "0.75rem", color: "#6F665E" }}>Default: password123</span>
-        </div>
+        <label
+          htmlFor="password"
+          style={{
+            display: "block",
+            fontSize: "0.8125rem",
+            fontWeight: 600,
+            color: "#2B2623",
+            marginBottom: "0.375rem",
+          }}
+        >
+          Password
+        </label>
         <input
           id="password"
           name="password"
           type="password"
           required
           autoComplete="current-password"
-          defaultValue="password123"
-          placeholder="••••••••••••"
+          placeholder="Enter institutional account password"
           style={{
             width: "100%",
             boxSizing: "border-box",

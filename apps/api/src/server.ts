@@ -1,8 +1,10 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import { authenticateUser } from "./auth/rbac.middleware.js";
 
+import authRouter from "./auth/auth.routes.js";
 import ingestionRouter from "./modules/ingestion/index.js";
 import profileRouter from "./modules/profile/index.js";
 import scoringRouter from "./modules/scoring/index.js";
@@ -16,11 +18,13 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/academic_risk_radar";
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 app.use(authenticateUser);
 
-// Mount All Module API Routers (M1 - M8)
+// Mount Authentication & Module API Routers
+app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/admin", ingestionRouter);
 app.use("/api/v1", profileRouter);
 app.use("/api/v1", scoringRouter);
@@ -31,7 +35,7 @@ app.use("/api/v1", analyticsRouter);
 app.use("/api/v1/admin", adminRouter);
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 

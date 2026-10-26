@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import express from "express";
-import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
 import { UserModel } from "../src/db/schemas.js";
 import authRouter from "../src/auth/auth.routes.js";
 import { authenticateUser } from "../src/auth/rbac.middleware.js";
-import { SESSION_COOKIE_NAME } from "../src/auth/jwt.service.js";
 
 describe("Authentication & JWT Session Tests (Team Member 1 — Pawan)", () => {
   function createAuthTestServer() {
@@ -17,7 +15,6 @@ describe("Authentication & JWT Session Tests (Team Member 1 — Pawan)", () => {
       max: 1000,
     });
     app.use(express.json());
-    app.use(cookieParser());
     app.use(limiter);
     app.use(authenticateUser);
 
@@ -107,7 +104,7 @@ describe("Authentication & JWT Session Tests (Team Member 1 — Pawan)", () => {
     }
   });
 
-  it("POST /auth/login with correct credentials returns 200, JWT token, and session cookie", async () => {
+  it("POST /auth/login with correct credentials returns 200 and signed JWT token", async () => {
     const app = createAuthTestServer();
     const server = app.listen(0);
     const port = (server.address() as any).port;
@@ -143,12 +140,6 @@ describe("Authentication & JWT Session Tests (Team Member 1 — Pawan)", () => {
       assert.equal(json.user.email, "instructor@radar.edu");
       assert.equal(json.user.role, "instructor");
 
-      // Verify Set-Cookie header contains session_token
-      const setCookie = res.headers.get("set-cookie");
-      assert.ok(setCookie, "Must set session_token cookie");
-      assert.match(setCookie, new RegExp(SESSION_COOKIE_NAME));
-      assert.match(setCookie, /HttpOnly/i);
-
       // Verify GET /auth/me using the issued token in Authorization header
       const meRes = await fetch(`http://127.0.0.1:${port}/api/v1/auth/me`, {
         headers: { Authorization: `Bearer ${json.token}` },
@@ -176,7 +167,7 @@ describe("Authentication & JWT Session Tests (Team Member 1 — Pawan)", () => {
     }
   });
 
-  it("POST /auth/logout clears session_token cookie", async () => {
+  it("POST /auth/logout returns 200 with success status", async () => {
     const app = createAuthTestServer();
     const server = app.listen(0);
     const port = (server.address() as any).port;
@@ -186,9 +177,8 @@ describe("Authentication & JWT Session Tests (Team Member 1 — Pawan)", () => {
         method: "POST",
       });
       assert.equal(res.status, 200);
-      const setCookie = res.headers.get("set-cookie");
-      assert.ok(setCookie);
-      assert.match(setCookie, new RegExp(SESSION_COOKIE_NAME));
+      const json = (await res.json()) as any;
+      assert.equal(json.status, "success");
     } finally {
       server.close();
     }

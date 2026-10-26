@@ -1,15 +1,12 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { UserModel } from "../db/schemas.js";
-import {
-  signToken,
-  SafeUserClaims,
-  SESSION_COOKIE_NAME,
-} from "./jwt.service.js";
+import { signToken, SafeUserClaims } from "./jwt.service.js";
 
 /**
  * POST /api/v1/auth/login
  * Validates user credentials against MongoDB and returns safe user metadata and signed JWT.
+ * Stateless REST endpoint returning Bearer token for client/proxy session handling.
  */
 export async function login(req: Request, res: Response) {
   const { email, password } = req.body || {};
@@ -50,15 +47,6 @@ export async function login(req: Request, res: Response) {
 
     const token = signToken(safeClaims);
 
-    // Set secure HTTP-only cookie
-    res.cookie(SESSION_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 12 * 60 * 60 * 1000, // 12 hours
-    });
-
     return res.status(200).json({
       status: "success",
       user: safeClaims,
@@ -74,16 +62,9 @@ export async function login(req: Request, res: Response) {
 
 /**
  * POST /api/v1/auth/logout
- * Clears the session cookie.
+ * Stateless logout endpoint.
  */
 export async function logout(_req: Request, res: Response) {
-  res.clearCookie(SESSION_COOKIE_NAME, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
-
   return res.status(200).json({
     status: "success",
     message: "Logged out successfully",

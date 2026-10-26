@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import { authenticateUser } from "./auth/rbac.middleware.js";
 
@@ -17,31 +16,32 @@ import adminRouter from "./modules/admin/index.js";
 const app = express();
 const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/academic_risk_radar";
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
+
+const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const ALLOWED_ORIGINS = configuredOrigins.length > 0
+  ? configuredOrigins
+  : [process.env.FRONTEND_URL || "http://localhost:3000", "http://127.0.0.1:3000"];
+
+// Configure secure CORS whitelist for stateless REST API
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) {
-        callback(null, true);
-        return;
+      // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
       }
-
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error("CORS origin not allowed"));
+      return callback(new Error("CORS origin not allowed"), false);
     },
-    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
 app.use(express.json());
-app.use(cookieParser());
 app.use(authenticateUser);
 
 // Mount Authentication & Module API Routers

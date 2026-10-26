@@ -60,16 +60,14 @@ export function verifyToken(token: string): SafeUserClaims | null {
   }
 }
 
-/**
- * Extract token from cookie, header, or Bearer auth.
- */
 export function extractTokenFromRequest(req: Request): string | null {
-  // 1. Check req.cookies parsed by cookie-parser
-  if (req.cookies && req.cookies[SESSION_COOKIE_NAME]) {
-    return req.cookies[SESSION_COOKIE_NAME];
+  // 1. Primary: Check Authorization header (Bearer <token>)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    return authHeader.substring(7).trim();
   }
 
-  // 2. Check raw Cookie header
+  // 2. Fallback: Parse raw Cookie header string if present
   const rawCookieHeader = req.headers.cookie;
   if (rawCookieHeader) {
     const cookies = rawCookieHeader.split(";").map((c) => c.trim());
@@ -79,12 +77,6 @@ export function extractTokenFromRequest(req: Request): string | null {
         if (value) return decodeURIComponent(value);
       }
     }
-  }
-
-  // 3. Check Authorization header (Bearer <token>)
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7).trim();
   }
 
   return null;

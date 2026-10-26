@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { UserRole } from "@academic-risk-radar/shared-types";
+import { extractTokenFromRequest, verifyToken, SafeUserClaims } from "./jwt.service.js";
 
 export interface AuthenticatedUser {
   id: string;
@@ -7,6 +8,7 @@ export interface AuthenticatedUser {
   email: string;
   departmentId?: string;
   sectionIds?: string[];
+  identityId?: string;
 }
 
 declare global {
@@ -18,39 +20,39 @@ declare global {
 }
 
 /**
- * Middleware to extract authenticated user from authorization header or dev fallback.
+ * Middleware to extract authenticated user from signed JWT cookie or Bearer header.
+ * Strictly ignores caller-controlled x-user-* headers and removes default admin fallback.
  */
-export function authenticateUser(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  const userHeader = req.headers["x-user-id"];
-  const roleHeader = req.headers["x-user-role"] as UserRole | undefined;
+export function authenticateUser(req: Request, _res: Response, next: NextFunction) {
+  const token = extractTokenFromRequest(req);
 
-  if (userHeader && roleHeader) {
-    req.user = {
-      id: String(userHeader),
-      role: roleHeader,
-      email: `${userHeader}@academic.edu`,
-    };
-    return next();
+  if (token) {
+    const claims = verifyToken(token);
+    if (claims) {
+      req.user = {
+        id: claims.id,
+        role: claims.role,
+        email: claims.email,
+        departmentId: claims.departmentId,
+        sectionIds: claims.sectionIds,
+        identityId: claims.identityId || claims.id,
+      };
+    }
   }
 
-  // Development default fallback if no header provided
-  req.user = {
-    id: "admin_user_1",
-    role: "admin",
-    email: "admin@academic.edu",
-  };
-
+  // Caller-controlled x-user-id, x-user-role, x-user-email are strictly ignored.
+  // Missing or invalid token leaves req.user = undefined (Zero Trust).
   next();
 }
 
 /**
  * Require one of the specified roles.
+ * Returns HTTP 401 if unauthenticated, HTTP 403 if authenticated with unauthorized role.
  */
 export function requireRole(...allowedRoles: UserRole[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ error: "Unauthorized: Missing user authentication" });
+      return res.status(401).json({ error: "Unauthorized: Missing or invalid authentication session" });
     }
 
     if (!allowedRoles.includes(req.user.role)) {
@@ -72,11 +74,12 @@ export function enforceStudentAccessControl(req: Request, res: Response, next: N
   const user = req.user;
 
   if (!user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({ error: "Unauthorized: Missing or invalid authentication session" });
   }
 
   // Rule 1: Student can only view their own record
   if (user.role === "student") {
+    const currentStudentId = user.identityId || user.id;
     const studentIdsToCheck: (string | undefined)[] = [
       req.params.id,
       req.params.studentId,
@@ -90,9 +93,11 @@ export function enforceStudentAccessControl(req: Request, res: Response, next: N
     }
 
     for (const sid of studentIdsToCheck) {
-      if (sid && String(sid) !== String(user.id)) {
+      if (sid && String(sid) !== String(currentStudentId)) {
         return res.status(403).json({
           error: "Forbidden: Students are restricted to accessing their own data",
+          requestedId: sid,
+          authenticatedId: currentStudentId,
         });
       }
     }

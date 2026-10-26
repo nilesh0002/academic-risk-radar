@@ -7,8 +7,17 @@ import {
 } from "@academic-risk-radar/scoring-engine";
 import { RiskModelVersion, RiskSnapshot } from "@academic-risk-radar/shared-types";
 
-const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1";
-const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379", 10);
+let resolvedRedisHost = process.env.REDIS_HOST || "127.0.0.1";
+let resolvedRedisPort = parseInt(process.env.REDIS_PORT || "6379", 10);
+if (process.env.REDIS_URL) {
+  try {
+    const parsedRedis = new URL(process.env.REDIS_URL);
+    resolvedRedisHost = parsedRedis.hostname || resolvedRedisHost;
+    resolvedRedisPort = parseInt(parsedRedis.port || "6379", 10);
+  } catch {}
+}
+const REDIS_HOST = resolvedRedisHost;
+const REDIS_PORT = resolvedRedisPort;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/academic_risk_radar";
 
 /**

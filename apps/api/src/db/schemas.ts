@@ -72,16 +72,20 @@ const AuditEntrySchema = new Schema<AuditEntry>({
 });
 export const AuditEntryModel = mongoose.model<AuditEntry>("AuditEntry", AuditEntrySchema);
 
-// User Schema
+// User Schema (Auth & RBAC — Team Member 1)
 const UserSchema = new Schema<User>({
   _id: { type: String, required: true },
   role: { type: String, enum: ["student", "instructor", "mentor", "hod", "dean", "admin"], required: true },
   name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  departmentId: { type: String },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  passwordHash: { type: String, required: true },
+  departmentId: { type: String, default: null },
   sectionIds: [{ type: String }],
+  identityId: { type: String, default: null },
 });
+UserSchema.index({ role: 1 });
 export const UserModel = mongoose.model<User>("User", UserSchema);
+
 
 // Attendance Record Schema (M1)
 const AttendanceRecordSchema = new Schema<AttendanceRecord>({
@@ -181,4 +185,6 @@ const InterventionSchema = new Schema<Intervention>({
 InterventionSchema.index({ alertId: 1, mentorId: 1 });
 InterventionSchema.index({ mentorId: 1, createdAt: -1 });
 export const InterventionModel = mongoose.model<Intervention>("Intervention", InterventionSchema);
+
+
 

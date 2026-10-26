@@ -9,55 +9,14 @@ export interface SessionUser {
   role: UserRole;
   departmentId?: string;
   sectionIds?: string[];
+  identityId?: string;
 }
 
-export const SESSION_COOKIE_NAME = "arr_session";
-
-export const DEFAULT_USERS_BY_ROLE: Record<UserRole, SessionUser> = {
-  student: {
-    id: "STU_ALICE",
-    name: "Rahul Sharma",
-    email: "student@academic.edu",
-    role: "student",
-    sectionIds: ["P134"],
-  },
-  mentor: {
-    id: "MENTOR_01",
-    name: "Dr. Vikram Joshi",
-    email: "mentor@academic.edu",
-    role: "mentor",
-  },
-  instructor: {
-    id: "INST_01",
-    name: "Prof. Ananya Sen",
-    email: "instructor@academic.edu",
-    role: "instructor",
-    sectionIds: ["SEC_A"],
-  },
-  hod: {
-    id: "HOD_01",
-    name: "Dr. Rajesh Kulkarni",
-    email: "hod@academic.edu",
-    role: "hod",
-    departmentId: "CSE",
-  },
-  dean: {
-    id: "DEAN_01",
-    name: "Dean Meenakshi Sundaram",
-    email: "dean@academic.edu",
-    role: "dean",
-  },
-  admin: {
-    id: "admin_user_1",
-    name: "System Administrator",
-    email: "admin@academic.edu",
-    role: "admin",
-  },
-};
+export const SESSION_COOKIE_NAME = "session_token";
 
 export const ROLE_HOME_ROUTES: Record<UserRole, string> = {
   student: "/risk",
-  mentor: "/interventions",
+  mentor: "/inbox",
   instructor: "/sections",
   hod: "/hod-dashboard",
   dean: "/dean-dashboard",
@@ -65,24 +24,65 @@ export const ROLE_HOME_ROUTES: Record<UserRole, string> = {
 };
 
 /**
- * Retrieve the current active session on the server side.
+ * Decode JWT payload on server components without native crypto dependency.
+ */
+export function decodeJwtPayload(token: string): SessionUser | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonStr = Buffer.from(base64, "base64").toString("utf-8");
+    const decoded = JSON.parse(jsonStr);
+
+    // Check expiration
+    if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+      return null;
+    }
+
+    if (!decoded.id || !decoded.role) {
+      return null;
+    }
+
+    return {
+      id: decoded.id,
+      name: decoded.name || decoded.email,
+      email: decoded.email,
+      role: decoded.role,
+      departmentId: decoded.departmentId || undefined,
+      sectionIds: decoded.sectionIds || [],
+      identityId: decoded.identityId || decoded.id,
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Retrieve the current active session on the server side from the signed session token cookie.
  */
 export async function getSession(): Promise<SessionUser | null> {
   const cookieStore = cookies();
-  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value || cookieStore.get("arr_session")?.value;
 
-  if (!sessionCookie || !sessionCookie.value) {
+  if (!token) {
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(decodeURIComponent(sessionCookie.value)) as SessionUser;
-    if (parsed && parsed.id && parsed.role) {
-      return parsed;
-    }
-  } catch (err) {
-    console.warn("[Auth] Failed to parse session cookie:", err);
+  // First try parsing as signed JWT
+  const user = decodeJwtPayload(token);
+  if (user) {
+    return user;
   }
+
+  // Backward compatibility fallback for transitional JSON cookie
+  try {
+    const parsed = JSON.parse(decodeURIComponent(token));
+    if (parsed && parsed.id && parsed.role) {
+      return parsed as SessionUser;
+    }
+  } catch (_) {}
 
   return null;
 }

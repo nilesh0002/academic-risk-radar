@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import http from "node:http";
 import express from "express";
 import { authenticateUser } from "../src/auth/rbac.middleware.js";
+import { signToken } from "../src/auth/jwt.service.js";
 import interventionsRouter from "../src/modules/interventions/index.js";
 
 /**
@@ -36,12 +37,31 @@ function startServer(app: express.Express): Promise<{ port: number; close: () =>
   });
 }
 
+async function authFetch(url: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  const userId = headers.get("x-user-id");
+  const userRole = headers.get("x-user-role");
+  if (!headers.has("Authorization") && (userId || userRole)) {
+    headers.set(
+      "Authorization",
+      `Bearer ${signToken({
+        id: userId || "mentor-001",
+        name: userId || "mentor-001",
+        email: `${(userId || "mentor").toLowerCase()}@radar.edu`,
+        role: (userRole as any) || "mentor",
+        identityId: userId || "mentor-001",
+      })}`
+    );
+  }
+  return fetch(url, { ...init, headers });
+}
+
 describe("M6: Intervention & Outcome Tracking — RBAC Tests", () => {
   it("POST /interventions should return 403 for student role", async () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -64,7 +84,7 @@ describe("M6: Intervention & Outcome Tracking — RBAC Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -87,7 +107,7 @@ describe("M6: Intervention & Outcome Tracking — RBAC Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -110,7 +130,7 @@ describe("M6: Intervention & Outcome Tracking — RBAC Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions/some-id/outcome`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions/some-id/outcome`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +149,7 @@ describe("M6: Intervention & Outcome Tracking — RBAC Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
         headers: {
           "x-user-id": "student-001",
           "x-user-role": "student",
@@ -145,7 +165,7 @@ describe("M6: Intervention & Outcome Tracking — RBAC Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
         headers: {
           "x-user-id": "instructor-001",
           "x-user-role": "instructor",
@@ -163,7 +183,7 @@ describe("M6: Intervention & Outcome Tracking — Validation Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -187,7 +207,7 @@ describe("M6: Intervention & Outcome Tracking — Validation Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -211,7 +231,7 @@ describe("M6: Intervention & Outcome Tracking — Validation Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -235,7 +255,7 @@ describe("M6: Intervention & Outcome Tracking — Validation Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions/some-id/outcome`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions/some-id/outcome`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -256,7 +276,7 @@ describe("M6: Intervention & Outcome Tracking — Validation Tests", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions/some-id/outcome`, {
+      const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions/some-id/outcome`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -277,7 +297,7 @@ describe("M6: Intervention & Outcome Tracking — Validation Tests", () => {
       const app = createTestApp();
       const { port, close } = await startServer(app);
       try {
-        const res = await fetch(`http://127.0.0.1:${port}/api/v1/interventions/nonexistent/outcome`, {
+        const res = await authFetch(`http://127.0.0.1:${port}/api/v1/interventions/nonexistent/outcome`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -300,7 +320,7 @@ describe("M6: Mentor Isolation — RBAC", () => {
     const app = createTestApp();
     const { port, close } = await startServer(app);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `http://127.0.0.1:${port}/api/v1/interventions?mentorId=other-mentor-999`,
         {
           headers: {

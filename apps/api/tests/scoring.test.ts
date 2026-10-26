@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it, after } from "node:test";
 import express from "express";
 import { authenticateUser } from "../src/auth/rbac.middleware.js";
+import { signToken } from "../src/auth/jwt.service.js";
 import scoringRouter from "../src/modules/scoring/index.js";
 import { closeScoringQueue } from "../src/modules/scoring/queue.js";
 
@@ -18,6 +19,18 @@ describe("Module M3 — Risk Scoring Endpoints (Stage 2)", () => {
     return app;
   }
 
+  function makeToken(user: { id: string; role: any; departmentId?: string; sectionIds?: string[]; identityId?: string }) {
+    return signToken({
+      id: user.id,
+      name: user.id,
+      email: `${user.id.toLowerCase()}@radar.edu`,
+      role: user.role,
+      departmentId: user.departmentId,
+      sectionIds: user.sectionIds,
+      identityId: user.identityId || user.id,
+    });
+  }
+
   after(async () => {
     await closeScoringQueue();
   });
@@ -28,10 +41,10 @@ describe("Module M3 — Risk Scoring Endpoints (Stage 2)", () => {
     const port = (server.address() as any).port;
 
     try {
+      const adminToken = makeToken({ id: "ADMIN_01", role: "admin" });
       const res = await fetch(`http://127.0.0.1:${port}/api/v1/students/NON_EXISTENT_STU/risk`, {
         headers: {
-          "x-user-id": "ADMIN_01",
-          "x-user-role": "admin",
+          Authorization: `Bearer ${adminToken}`,
         },
       });
 
@@ -49,10 +62,10 @@ describe("Module M3 — Risk Scoring Endpoints (Stage 2)", () => {
     const port = (server.address() as any).port;
 
     try {
+      const studentToken = makeToken({ id: "STU_ALICE", role: "student" });
       const res = await fetch(`http://127.0.0.1:${port}/api/v1/students/STU_BOB/risk`, {
         headers: {
-          "x-user-id": "STU_ALICE",
-          "x-user-role": "student",
+          Authorization: `Bearer ${studentToken}`,
         },
       });
 
@@ -68,12 +81,12 @@ describe("Module M3 — Risk Scoring Endpoints (Stage 2)", () => {
     const port = (server.address() as any).port;
 
     try {
+      const adminToken = makeToken({ id: "ADMIN_01", role: "admin" });
       const res = await fetch(`http://127.0.0.1:${port}/api/v1/scoring/batch`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": "ADMIN_01",
-          "x-user-role": "admin",
+          Authorization: `Bearer ${adminToken}`,
         },
         body: JSON.stringify({
           studentIds: ["STU_001", "STU_002"],

@@ -4,58 +4,94 @@ services:
   mongodb:
     image: mongo:7.0
     container_name: academic_risk_mongo
+    restart: always
     ports:
       - "27017:27017"
     environment:
       MONGO_INITDB_DATABASE: academic_risk_radar
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:7.2-alpine
     container_name: academic_risk_redis
+    restart: always
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   api:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
     container_name: academic_risk_api
+    restart: always
     ports:
       - "4000:4000"
     environment:
       PORT: 4000
       MONGO_URI: mongodb://mongodb:27017/academic_risk_radar
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: super_secret_development_key
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-evaluation_development_jwt_secret_radar_2026}
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   workers:
     build:
       context: ..
       dockerfile: apps/workers/Dockerfile
     container_name: academic_risk_workers
+    restart: always
     environment:
       MONGO_URI: mongodb://mongodb:27017/academic_risk_radar
       REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
 
   web:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
     container_name: academic_risk_web
+    restart: always
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000
+      PORT: 3000
+      API_INTERNAL_URL: http://api:4000
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   mongo_data:

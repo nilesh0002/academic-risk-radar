@@ -3,6 +3,7 @@ import cors from "cors";
 import mongoose from "mongoose";
 import { authenticateUser } from "./auth/rbac.middleware.js";
 
+import authRouter from "./auth/auth.routes.js";
 import ingestionRouter from "./modules/ingestion/index.js";
 import profileRouter from "./modules/profile/index.js";
 import scoringRouter from "./modules/scoring/index.js";
@@ -16,11 +17,35 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/academic_risk_radar";
 
-app.use(cors());
+const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const ALLOWED_ORIGINS = configuredOrigins.length > 0
+  ? configuredOrigins
+  : [process.env.FRONTEND_URL || "http://localhost:3000", "http://127.0.0.1:3000"];
+
+// Configure secure CORS whitelist for stateless REST API
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS origin not allowed"), false);
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
 app.use(express.json());
 app.use(authenticateUser);
 
-// Mount All Module API Routers (M1 - M8)
+// Mount Authentication & Module API Routers
+app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/admin", ingestionRouter);
 app.use("/api/v1", profileRouter);
 app.use("/api/v1", scoringRouter);
@@ -31,7 +56,7 @@ app.use("/api/v1", analyticsRouter);
 app.use("/api/v1/admin", adminRouter);
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 

@@ -114,8 +114,10 @@ export interface User {
   role: UserRole;
   name: string;
   email: string;
+  passwordHash?: string;
   departmentId?: string;
   sectionIds?: string[];
+  identityId?: string;
 }
 
 export interface AuditEntry {

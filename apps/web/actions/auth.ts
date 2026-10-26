@@ -3,9 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { UserRole } from "@academic-risk-radar/shared-types";
 import {
-  DEFAULT_USERS_BY_ROLE,
   ROLE_HOME_ROUTES,
   SESSION_COOKIE_NAME,
   SessionUser,
@@ -27,8 +25,12 @@ export interface LoginResult {
 
 export type LoginState = LoginResult | null;
 
+const API_INTERNAL_URL =
+  process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
 /**
- * Server action to authenticate credentials and establish a secure session cookie.
+ * Server action to authenticate credentials against Express /api/v1/auth/login
+ * and establish a signed JWT session cookie.
  */
 export async function loginAction(
   prevState: LoginState,
@@ -49,62 +51,52 @@ export async function loginAction(
 
   const { email, password, returnUrl } = validation.data;
 
-  // Search for matching user in seeded profiles
-  let matchedUser: SessionUser | null = null;
-  for (const user of Object.values(DEFAULT_USERS_BY_ROLE)) {
-    if (user.email.toLowerCase() === email.toLowerCase()) {
-      matchedUser = user;
-      break;
+  try {
+    const res = await fetch(`${API_INTERNAL_URL}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.token) {
+      return {
+        error: data.error || "Invalid institutional email or password.",
+      };
     }
-  }
 
-  // Simulated authentication check (default password 'password123' or matching email prefix)
-  const isValidPassword = password === "password123" || password === "radar2026" || password === "password";
+    const token: string = data.token;
+    const user: SessionUser = data.user;
 
-  if (!matchedUser || !isValidPassword) {
+    // Set signed JWT session cookie
+    const cookieStore = cookies();
+    cookieStore.set(SESSION_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 12 * 60 * 60, // 12 hours
+    });
+
+    const destination =
+      returnUrl && returnUrl.startsWith("/") && !returnUrl.includes("/login")
+        ? returnUrl
+        : ROLE_HOME_ROUTES[user.role] || "/";
+
+    redirect(destination);
+  } catch (err: any) {
+    // If redirect() throws NEXT_REDIRECT, let it pass through
+    if (err?.message === "NEXT_REDIRECT" || err?.digest?.startsWith("NEXT_REDIRECT")) {
+      throw err;
+    }
+
+    console.error("[Auth Action] Error contacting auth service:", err);
     return {
-      error: "That email and password don't match. Check both and try again.",
+      error: "Unable to connect to authentication service. Please ensure the backend is running.",
     };
   }
-
-  // Set httpOnly session cookie
-  const cookieStore = cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, encodeURIComponent(JSON.stringify(matchedUser)), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
-
-  const destination = returnUrl && returnUrl.startsWith("/") && !returnUrl.includes("/login")
-    ? returnUrl
-    : ROLE_HOME_ROUTES[matchedUser.role] || "/";
-
-  redirect(destination);
-}
-
-/**
- * Rapid role switcher for Viva demos and testing different access levels.
- */
-export async function switchRoleAction(role: UserRole, returnUrl?: string) {
-  const user = DEFAULT_USERS_BY_ROLE[role];
-  if (!user) return;
-
-  const cookieStore = cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, encodeURIComponent(JSON.stringify(user)), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-
-  const destination = returnUrl && returnUrl.startsWith("/") && !returnUrl.includes("/login")
-    ? returnUrl
-    : ROLE_HOME_ROUTES[role] || "/";
-
-  redirect(destination);
 }
 
 /**
@@ -113,5 +105,6 @@ export async function switchRoleAction(role: UserRole, returnUrl?: string) {
 export async function logoutAction() {
   const cookieStore = cookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
+  cookieStore.delete("arr_session");
   redirect("/login");
 }

@@ -96,8 +96,28 @@ export async function gatherStudentMetrics(
       }
     }
 
-    // Trend deterioration signal (default safe value)
-    const trendDeteriorationSignal = 0.05;
+    // Trend deterioration signal: compute using M4 trends engine if available
+    let trendDeteriorationSignal = 0.05;
+    try {
+      // @ts-ignore
+      const trendsModule = await import("../../api/dist/src/modules/trends/index.js");
+      if (trendsModule?.computeStudentTrendsFromRecords) {
+        const attendance = AttendanceRecordModel ? await AttendanceRecordModel.find({ studentId }).lean() : [];
+        const assessments = AssessmentRecordModel ? await AssessmentRecordModel.find({ studentId }).lean() : [];
+        const assignments = AssignmentSubmissionModel ? await AssignmentSubmissionModel.find({ studentId }).lean() : [];
+        const lms = LmsActivityModel ? await LmsActivityModel.find({ studentId }).lean() : [];
+
+        const trendResult = trendsModule.computeStudentTrendsFromRecords(studentId, {
+          attendance,
+          assessments,
+          assignments,
+          lms,
+        });
+        trendDeteriorationSignal = trendResult.trendDeteriorationSignal;
+      }
+    } catch {
+      trendDeteriorationSignal = 0.05;
+    }
 
     return {
       attendanceRate: Math.max(0, Math.min(1, attendanceRate)),

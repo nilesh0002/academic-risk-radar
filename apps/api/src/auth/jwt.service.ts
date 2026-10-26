@@ -26,6 +26,8 @@ export function signToken(claims: SafeUserClaims): string {
   return jwt.sign(
     {
       id: claims.id,
+      name: claims.name,
+      email: claims.email,
       role: claims.role,
       departmentId: claims.departmentId || null,
       sectionIds: claims.sectionIds || [],

@@ -20,11 +20,30 @@ import {
   LmsActivity,
 } from "@academic-risk-radar/shared-types";
 
+import { signToken } from "../src/auth/jwt.service.js";
+
 function makeRequest(
   path: string,
   method: string = "GET",
   headers: Record<string, string> = {}
 ): Promise<{ statusCode: number; data: any }> {
+  const reqHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...headers,
+  };
+
+  if (!reqHeaders.Authorization && (headers["x-user-id"] || headers["x-user-role"])) {
+    const userId = headers["x-user-id"] || "user-test";
+    const role = (headers["x-user-role"] as any) || "student";
+    reqHeaders.Authorization = `Bearer ${signToken({
+      id: userId,
+      name: userId,
+      email: `${userId.toLowerCase()}@radar.edu`,
+      role,
+      identityId: userId,
+    })}`;
+  }
+
   return new Promise((resolve, reject) => {
     const server = http.createServer(app);
     server.listen(0, () => {
@@ -40,10 +59,7 @@ function makeRequest(
           port: address.port,
           path,
           method,
-          headers: {
-            "Content-Type": "application/json",
-            ...headers,
-          },
+          headers: reqHeaders,
         },
         (res) => {
           let rawData = "";

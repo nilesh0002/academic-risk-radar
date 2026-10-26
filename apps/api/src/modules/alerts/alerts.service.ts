@@ -62,24 +62,32 @@ export async function generateOrUpdateAlertForSnapshot(
     };
   }
 
-  const studentId = snapshot.studentId;
+  // Sanitize user-controlled studentId before any DB query (prevents NoSQL injection)
+  const studentId = sanitizeId(snapshot.studentId);
+  if (!studentId) {
+    return {
+      alert: null,
+      action: "ignored",
+      reason: "Invalid or missing studentId on snapshot",
+    };
+  }
 
   // 2. Lookup assigned mentor
   const assignment = await MentorAssignmentModel.findOne({
-    studentId,
+    studentId: { $eq: studentId },
     assignedTo: null,
   }).lean();
 
   let mentorId = assignment?.mentorId;
   if (!mentorId) {
     // Check any past assignment or fallback mentor
-    const anyAssignment = await MentorAssignmentModel.findOne({ studentId }).lean();
+    const anyAssignment = await MentorAssignmentModel.findOne({ studentId: { $eq: studentId } }).lean();
     mentorId = anyAssignment?.mentorId || "MTR-DEFAULT";
   }
 
   // 3. Deduplication: Check for existing open alert for the student
   const existingOpenAlert = await AlertModel.findOne({
-    studentId,
+    studentId: { $eq: studentId },
     status: "open",
   });
 

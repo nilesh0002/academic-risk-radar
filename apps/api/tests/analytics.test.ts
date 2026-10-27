@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import http from "node:http";
 import express from "express";
 import { authenticateUser } from "../src/auth/rbac.middleware.js";
+import { signToken } from "../src/auth/jwt.service.js";
 import analyticsRouter from "../src/modules/analytics/index.js";
 
 /**
@@ -17,6 +18,21 @@ import analyticsRouter from "../src/modules/analytics/index.js";
 function createTestApp(departmentId?: string) {
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => {
+    if (!req.headers.authorization && (req.headers["x-user-id"] || req.headers["x-user-role"])) {
+      const userId = (req.headers["x-user-id"] as string) || "user-test";
+      const role = (req.headers["x-user-role"] as any) || "student";
+      req.headers.authorization = `Bearer ${signToken({
+        id: userId,
+        name: userId,
+        email: `${userId.toLowerCase()}@radar.edu`,
+        role,
+        departmentId: (req.headers["x-user-dept"] as string) || undefined,
+        identityId: userId,
+      })}`;
+    }
+    next();
+  });
   app.use(authenticateUser);
   // Inject departmentId into user after authenticateUser sets req.user
   if (departmentId) {

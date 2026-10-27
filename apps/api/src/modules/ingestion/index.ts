@@ -59,6 +59,35 @@ router.get("/connectors/status", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/v1/admin/connectors/quarantine
+ * Returns recent quarantined records with failure reasons and pagination.
+ */
+router.get("/connectors/quarantine", async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const collectionFilter = req.query.collection as string | undefined;
+    const filter = collectionFilter ? { originalCollection: collectionFilter } : {};
+
+    const [total, records] = await Promise.all([
+      QuarantineModel.countDocuments(filter).catch(() => 0),
+      QuarantineModel.find(filter)
+        .sort({ ingestedAt: -1 })
+        .limit(limit)
+        .lean(),
+    ]);
+
+    res.json({
+      status: "success",
+      total,
+      count: records.length,
+      quarantined: records,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch quarantined records", details: err.message });
+  }
+});
+
+/**
  * POST /api/v1/admin/connectors/:name/sync
  * Accepts CSV payload and enqueues an asynchronous ingestion job via BullMQ.
  * Returns immediately with a job ID so the caller can poll for completion.

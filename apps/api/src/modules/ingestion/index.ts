@@ -68,15 +68,44 @@ router.get("/connectors/status", async (req: Request, res: Response) => {
   }
 });
 
+/** Allowed collections for quarantine query validation to prevent NoSQL query injection */
+const ALLOWED_QUARANTINE_COLLECTIONS = [
+  "attendanceRecords",
+  "assessmentRecords",
+  "assignmentSubmissions",
+  "lmsActivity",
+] as const;
+type AllowedQuarantineCollection = (typeof ALLOWED_QUARANTINE_COLLECTIONS)[number];
+
 /**
  * GET /api/v1/admin/connectors/quarantine
  * Returns recent quarantined records with failure reasons and pagination.
+ * CodeQL sanitized: input is validated against a static allowlist to prevent NoSQL injection.
  */
 router.get("/connectors/quarantine", async (req: Request, res: Response) => {
   try {
-    const limit = Math.min(Number(req.query.limit) || 20, 100);
-    const collectionFilter = req.query.collection as string | undefined;
-    const filter = collectionFilter ? { originalCollection: collectionFilter } : {};
+    const rawLimit = Number(req.query.limit);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
+
+    const rawCollection = req.query.collection;
+
+    if (rawCollection !== undefined && typeof rawCollection !== "string") {
+      return res.status(400).json({ error: "Invalid collection filter" });
+    }
+
+    let filter: { originalCollection?: AllowedQuarantineCollection } = {};
+
+    if (typeof rawCollection === "string") {
+      const trimmed = rawCollection.trim();
+      const match = ALLOWED_QUARANTINE_COLLECTIONS.find((c) => c === trimmed);
+      if (match) {
+        filter = { originalCollection: match };
+      } else {
+        return res.status(400).json({
+          error: `Unsupported collection filter '${trimmed}'. Allowed: ${ALLOWED_QUARANTINE_COLLECTIONS.join(", ")}`,
+        });
+      }
+    }
 
     const [total, records] = await Promise.all([
       QuarantineModel.countDocuments(filter).catch(() => 0),

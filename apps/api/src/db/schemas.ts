@@ -96,6 +96,7 @@ const AttendanceRecordSchema = new Schema<AttendanceRecord>({
   sourceRef: { type: String, required: true },
 });
 AttendanceRecordSchema.index({ studentId: 1, sectionId: 1, date: 1 }, { unique: true });
+AttendanceRecordSchema.index({ studentId: 1, date: -1 });
 export const AttendanceRecordModel = mongoose.model<AttendanceRecord>("AttendanceRecord", AttendanceRecordSchema);
 
 // Assessment Record Schema (M1)
@@ -109,6 +110,8 @@ const AssessmentRecordSchema = new Schema<AssessmentRecord>({
   sourceRef: { type: String, required: true },
 });
 AssessmentRecordSchema.index({ studentId: 1, courseId: 1, type: 1, date: 1 }, { unique: true });
+AssessmentRecordSchema.index({ studentId: 1, courseId: 1 });
+AssessmentRecordSchema.index({ courseId: 1, studentId: 1 });
 export const AssessmentRecordModel = mongoose.model<AssessmentRecord>("AssessmentRecord", AssessmentRecordSchema);
 
 // Assignment Submission Schema (M1)
@@ -120,6 +123,7 @@ const AssignmentSubmissionSchema = new Schema<AssignmentSubmission>({
   status: { type: String, enum: ["submitted", "missing", "late"], required: true },
 });
 AssignmentSubmissionSchema.index({ studentId: 1, assignmentId: 1 }, { unique: true });
+AssignmentSubmissionSchema.index({ studentId: 1, courseId: 1 });
 export const AssignmentSubmissionModel = mongoose.model<AssignmentSubmission>("AssignmentSubmission", AssignmentSubmissionSchema);
 
 // LMS Activity Schema (M1)

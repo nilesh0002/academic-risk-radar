@@ -12,6 +12,10 @@ export default function HomePage() {
           <h3 style={{ marginTop: 0 }}>Student Early Support View</h3>
           <p style={{ color: "#64748b", fontSize: "0.875rem" }}>View academic indicators and contributing risk factors in a clear, supportive interface.</p>
         </a>
+        <a href="/connectors" style={{ padding: "1.5rem", border: "1px solid #e2e8f0", borderRadius: "6px", textDecoration: "none", color: "#1e293b" }}>
+          <h3 style={{ marginTop: 0, color: "#0284c7" }}>Data Connectors & Ingestion</h3>
+          <p style={{ color: "#64748b", fontSize: "0.875rem" }}>Manage institutional data feeds, trigger CSV imports, and inspect quarantined records (Admin / M1).</p>
+        </a>
         <a href="/model-versions" style={{ padding: "1.5rem", border: "1px solid #e2e8f0", borderRadius: "6px", textDecoration: "none", color: "#1e293b" }}>
           <h3 style={{ marginTop: 0 }}>Scoring Model Management</h3>
           <p style={{ color: "#64748b", fontSize: "0.875rem" }}>Configure weights, preview band-change impact, and manage model versions (Admin).</p>

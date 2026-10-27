@@ -109,7 +109,7 @@ export async function gatherStudentMetrics(
     let trendDeteriorationSignal = 0.05;
     try {
       // @ts-ignore
-      const trendsModule = await import("../../api/dist/src/modules/trends/index.js");
+      const trendsModule: any = await import("../../api/dist/src/modules/trends/index.js");
       if (trendsModule?.computeStudentTrendsFromRecords) {
         const attendance = AttendanceRecordModel ? await AttendanceRecordModel.find({ studentId }).lean() : [];
         const assessments = AssessmentRecordModel ? await AssessmentRecordModel.find({ studentId }).lean() : [];

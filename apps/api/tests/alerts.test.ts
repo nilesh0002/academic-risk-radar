@@ -6,6 +6,7 @@ import http from "node:http";
 import app from "../src/server.js";
 import { simulateAlertDeduplication, sanitizeId } from "../src/modules/alerts/alerts.service.js";
 import { Alert, RiskSnapshot } from "@academic-risk-radar/shared-types";
+import { signToken } from "../src/auth/jwt.service.js";
 
 function makeRequest(
   path: string,
@@ -13,6 +14,23 @@ function makeRequest(
   headers: Record<string, string> = {},
   body?: object
 ): Promise<{ statusCode: number; data: any }> {
+  const reqHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...headers,
+  };
+
+  if (!reqHeaders.Authorization && (headers["x-user-id"] || headers["x-user-role"])) {
+    const userId = headers["x-user-id"] || "user-test";
+    const role = (headers["x-user-role"] as any) || "student";
+    reqHeaders.Authorization = `Bearer ${signToken({
+      id: userId,
+      name: userId,
+      email: `${userId.toLowerCase()}@radar.edu`,
+      role,
+      identityId: userId,
+    })}`;
+  }
+
   return new Promise((resolve, reject) => {
     const server = http.createServer(app);
     server.listen(0, () => {
@@ -30,9 +48,8 @@ function makeRequest(
           path,
           method,
           headers: {
-            "Content-Type": "application/json",
+            ...reqHeaders,
             "Content-Length": Buffer.byteLength(postData),
-            ...headers,
           },
         },
         (res) => {
